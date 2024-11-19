@@ -1,9 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:process_run/process_run.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -52,7 +56,6 @@ class MyHomePage extends StatefulWidget {
   // always marked "final".
 
   final String title;
-
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -120,7 +123,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: (){
+        onPressed: () {
           initAsync();
         },
         tooltip: 'Increment',
@@ -138,22 +141,31 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       var shell = Shell();
       await shell.run('''
-      su -c ls /data
+      su --mount-master -c ls /data
       ''');
       print("已经获得root");
 
-      const searchPath = '/data/data/com.tencent.mm';
-      const appPrivatePath = '/data/data/com.fuckguetsign.app.fuck_guet_sign/files';
+      final supportPath = (await getApplicationSupportDirectory()).path;
 
-     //  var result = await shell.run('''
-     // su -c "ls -a ${searchPath}"
-    // ''') ;
-    // //   var result = await shell.run('''
-    //   su -c "id"
-    //   su -c "setenforce 0"
-    //   su -c "ls -a /data/data/com.tencent.mm"
-    // ''') ;
-    //   print(result.map((e)=>e.outText));
+      final packageInfo = await PackageInfo.fromPlatform();
+      final packageName = packageInfo.packageName;
+
+      final basePath =
+          supportPath.substring(0, supportPath.lastIndexOf(packageName));
+
+      final searchPath = '${basePath}com.tencent.mm';
+
+      final appPrivatePath = join(supportPath, "wxcookies");
+
+      //  var result = await shell.run('''
+      // su -c "ls -a ${searchPath}"
+      // ''') ;
+      // //   var result = await shell.run('''
+      //   su -c "id"
+      //   su -c "setenforce 0"
+      //   su -c "ls -a /data/data/com.tencent.mm"
+      // ''') ;
+      //   print(result.map((e)=>e.outText));
 
       await findAndCopyCookies(searchPath, appPrivatePath);
 
@@ -168,7 +180,6 @@ class _MyHomePageState extends State<MyHomePage> {
       // } else {
       //   print('No Cookies files found.');
       // }
-
     } catch (e) {
       print(e);
     }
@@ -210,7 +221,8 @@ Future<List<File>> findAllCookiesFiles(Directory directory) async {
 }
 
 /// 搜索并拷贝所有 `Cookies` 文件到应用目录
-Future<void> findAndCopyCookies(String searchPath, String appPrivatePath) async {
+Future<void> findAndCopyCookies(
+    String searchPath, String appPrivatePath) async {
   // 使用 Shell 实例来运行命令
   var shell = Shell();
 
@@ -223,7 +235,7 @@ Future<void> findAndCopyCookies(String searchPath, String appPrivatePath) async 
 
     // 使用 find 命令查找 Cookies 文件
     var result = await shell.run('''
-      su -c "find $searchPath -type f -name 'Cookies'"
+      su --mount-master -c "find $searchPath -type f -name 'Cookies'"
     ''');
 
     // 收集找到的文件路径
@@ -231,17 +243,19 @@ Future<void> findAndCopyCookies(String searchPath, String appPrivatePath) async 
     print(output);
     if (output.isNotEmpty) {
       // 拆分为每个文件路径
-      final files = output.toString().split('\n').where((path) => path.isNotEmpty);
+      final files =
+          output.toString().split('\n').where((path) => path.isNotEmpty);
       print('Found Cookies files: ${files.join(', ')}');
 
       // 循环拷贝每个文件
       for (final filePath in files) {
         final fileName = filePath.split('/').last;
-        final targetPath = '$appPrivatePath/$fileName-${DateTime.timestamp().millisecondsSinceEpoch}';
+        final targetPath =
+            '$appPrivatePath/$fileName-${DateTime.timestamp().millisecondsSinceEpoch}';
 
         // 拷贝文件到目标目录
         await shell.run('''
-          su -c "cp $filePath $targetPath"
+          su --mount-master -c "cp $filePath $targetPath"
         ''');
 
         print('Copied: $filePath to $targetPath');
